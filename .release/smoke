@@ -1,0 +1,56 @@
+import 'package:egensolve_realtime/egensolve_realtime.dart' as protocol;
+import 'package:egensolve_realtime/lifecycle.dart' as lifecycle;
+import 'package:egensolve_realtime/lifecycle_adapters.dart' as adapters;
+import 'package:egensolve_realtime/media.dart';
+import 'package:egensolve_realtime/artifacts.dart';
+import 'package:egensolve_realtime/http.dart';
+
+final class FakeTransport implements ApiTransport {
+  final List<String> paths = [];
+  @override
+  Future<TransportResponse> send(
+      {required String method,
+      required Uri uri,
+      required Map<String, String> headers,
+      String? body,
+      required Duration timeout}) async {
+    paths.add(uri.path);
+    return const TransportResponse(200, {}, '{"state":"ready"}');
+  }
+}
+
+Future<void> main() async {
+  final channel = protocol.AccountChannel(
+    tenant: 'example',
+    actorType: 'user',
+    actorId: '42',
+  );
+  final parsed = protocol.ChannelParser.parse(channel.toChannelString());
+  if (parsed is! protocol.AccountChannel) {
+    throw StateError('protocol entrypoint is not usable');
+  }
+  if (lifecycle.LifecycleState.values.isEmpty) {
+    throw StateError('lifecycle entrypoint is not usable');
+  }
+  adapters.WebSocketTransport;
+  adapters.HttpAuthCallback;
+  adapters.HttpEphemeralPublishCallback;
+  const id = '01k3k7qh0f8w2y7x4m6n9p1r3t';
+  final transport = FakeTransport();
+  final media = MediaClient(
+      baseUrl: 'https://ers.example',
+      machineCredential: 'x' * 32,
+      transport: transport);
+  final artifacts = ArtifactsClient(
+      baseUrl: 'https://ers.example',
+      machineCredential: 'x' * 32,
+      transport: transport);
+  if ((await media.asset(id)).data['state'] != 'ready') {
+    throw StateError('Media consumer failed');
+  }
+  await artifacts.revision(id, id);
+  if (transport.paths[0] != '/api/v1/media/assets/$id' ||
+      transport.paths[1] != '/api/v1/artifacts/$id/revisions/$id') {
+    throw StateError('Consumer IDs were not preserved');
+  }
+}
