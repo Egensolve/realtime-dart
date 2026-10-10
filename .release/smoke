@@ -4,6 +4,7 @@ import 'package:egensolve_realtime/lifecycle_adapters.dart' as adapters;
 import 'package:egensolve_realtime/media.dart';
 import 'package:egensolve_realtime/artifacts.dart';
 import 'package:egensolve_realtime/http.dart';
+import 'package:egensolve_realtime/calls.dart';
 
 final class FakeTransport implements ApiTransport {
   final List<String> paths = [];
@@ -45,12 +46,29 @@ Future<void> main() async {
       baseUrl: 'https://ers.example',
       machineCredential: 'x' * 32,
       transport: transport);
+  final calls = CallsClient(
+      baseUrl: 'https://ers.example',
+      machineCredential: 'x' * 32,
+      transport: transport);
   if ((await media.asset(id)).data['state'] != 'ready') {
     throw StateError('Media consumer failed');
   }
   await artifacts.revision(id, id);
+  await calls.session('call_alpha');
   if (transport.paths[0] != '/api/v1/media/assets/$id' ||
-      transport.paths[1] != '/api/v1/artifacts/$id/revisions/$id') {
+      transport.paths[1] != '/api/v1/artifacts/$id/revisions/$id' ||
+      transport.paths[2] != '/api/v1/calls/sessions/call_alpha') {
     throw StateError('Consumer IDs were not preserved');
+  }
+  final transition = reduceCall(
+    CallProjection(installationRef: 'installation_alpha'),
+    CallInput.invitation(
+        callId: 'call_alpha',
+        expiresAt: DateTime.fromMillisecondsSinceEpoch(2000, isUtc: true)),
+    DateTime.fromMillisecondsSinceEpoch(1000, isUtc: true),
+  );
+  if (!transition.projection.snapshotRequired ||
+      transition.effects.single.type != CallEffectType.fetchSnapshot) {
+    throw StateError('Calls state machine consumer failed');
   }
 }
