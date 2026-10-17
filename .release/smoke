@@ -1,3 +1,4 @@
+import 'package:egensolve_realtime/intelligence.dart';
 import 'package:egensolve_realtime/egensolve_realtime.dart' as protocol;
 import 'package:egensolve_realtime/lifecycle.dart' as lifecycle;
 import 'package:egensolve_realtime/lifecycle_adapters.dart' as adapters;
@@ -70,5 +71,34 @@ Future<void> main() async {
   if (!transition.projection.snapshotRequired ||
       transition.effects.single.type != CallEffectType.fetchSnapshot) {
     throw StateError('Calls state machine consumer failed');
+  }
+  final intelligence = IntelligenceClient(
+      baseUrl: 'https://ers.example',
+      machineCredential: 'x' * 32,
+      transport: transport);
+  await intelligence.profiles();
+  await intelligence.createInstructionSet({}, 'instructions');
+  await intelligence.addInstructionRevision(
+      id,
+      {
+        'profile': 'text-generation-v1',
+        'instruction_asset_id': id,
+        'material_asset_ids': []
+      },
+      'revision');
+  await intelligence.instructionSet(id);
+  await intelligence.createJob({
+    'profile': 'text-generation-v1',
+    'instruction_asset_id': id,
+    'inputs': [
+      {'role': 'context', 'asset_id': id}
+    ],
+    'output_expires_at': '2026-11-01T00:00:00Z',
+    'force_fresh': true
+  }, 'generate');
+  await intelligence.job(id);
+  await intelligence.cancelJob(id, 'cancel');
+  if (transport.paths.last != '/api/v1/intelligence/jobs/$id/cancel') {
+    throw StateError('Intelligence archive consumer failed');
   }
 }
